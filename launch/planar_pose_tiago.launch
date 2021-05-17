@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+    <!-- Topics parameters-->
+    <!-- <param name="strImage_sub_topic"        value="/xtion/rgb/image_rect_color" /> -->
+    <param name="strImage_sub_topic"        value="/xtion/rgb/image_rect_color" />
+    <param name="strCameraInfo_sub_topic"   value="/xtion/rgb/camera_info" />
+    <param name="strImage_pub_topic"        value="/blob_detection/image_blob"/>
+    <param name="strMask_pub_topic"         value="/blob_detection/image_mask" />
+    <param name="strAgimusFrame_sub_topic"  value="/agimus/vision/tags" />
+    <param name="strTransform_sub_topic"    value="/agimus/vision/tags" />
+
+
+    <!-- <param name="strCameraModel"  value = "file://$(find tiago_blob_detection)/cfg/rgb_xtion.yaml"/> -->
+    <param name="bSimulation"    value = "false"/>
+
+
+
+    <node name="blob_detection" pkg="tiago_blob_detection" type="blob_detection" output ="screen"/>
+</launch>

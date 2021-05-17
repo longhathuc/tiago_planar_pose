@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+    <!-- Topics parameters-->
+    <!-- <param name="strImage_sub_topic"        value="/xtion/rgb/image_rect_color" /> -->
+    <param name="strImage_sub_topic"        value="/usb_cam/image_raw" />
+    <param name="strCameraInfo_sub_topic"   value="/xtion/rgb/camera_info" />
+    <param name="strImage_pub_topic"        value="/blob_detection/image_blob"/>
+    <param name="strMask_pub_topic"         value="/blob_detection/image_mask" />
+    <param name="strAgimusFrame_sub_topic"  value="/agimus/vision/tags" />
+    <param name="strTransform_sub_topic"    value="/agimus/vision/tags" />
+
+    <!-- Parameters for HSV mask filter -->
+    <param name="iHSV_min_H" value = "0"/>
+    <param name="iHSV_min_S" value = "0"/>
+    <!-- <param name="iHSV_min_V" value = "0"/> -->
+      <param name="iHSV_min_V" value = "80"/>
+    <param name="iHSV_max_H" value = "255"/>
+    <param name="iHSV_max_S" value = "255"/>
+    <!-- <param name="iHSV_max_V" value = "152"/> -->
+    <param name="iHSV_max_V" value = "255"/>
+
+    <!-- Parameters for blob properties-->
+    <param name="fMinThreshold"         value = "0.0"/>
+    <param name="fMaxThreshold"         value = "100.0"/>
+    <param name="bFilterByArea"         value = "true"/>
+    <param name="fMinArea"              value = "2.0"/>
+    <param name="fMaxArea"              value = "300.0"/>
+    <param name="bFilterByCircularity"  value = "false"/>
+    <param name="fMinCircularity"       value = "0.2"/>
+    <param name="fMaxCircularity"       value = "1.0"/>
+    <param name="bFilterByConvexity"    value = "true"/>
+    <param name="fMinConvexity"         value = "0.2"/>
+    <param name="fMaxConvexity"         value = "1.0"/>
+    <param name="bFilterByInertia"      value = "true"/>
+    <param name="fMinInertiaRatio"      value = "0.3"/>
+    <param name="fMaxInertiaRatio"      value = "1.0"/>
+
+    <!-- <param name="strCameraModel"  value = "file://$(find tiago_blob_detection)/cfg/logitech.yaml"/> -->
+    <param name="bSimulation"    value = "false"/>
+
+
+
+    <node name="planar_pose" pkg="tiago_planar_pose" type="planar_pose" output ="screen"/>
+</launch>
