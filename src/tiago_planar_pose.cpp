@@ -56,6 +56,7 @@ class PLanarPoseRGBD
 	    PLanarPoseRGBD(ros::NodeHandle nh_);
 	    ~PLanarPoseRGBD();
         void poseDetect();
+        // void initDisplay();
        
     protected:
         void imageCB(const sensor_msgs::ImageConstPtr& msg);
@@ -76,12 +77,17 @@ class PLanarPoseRGBD
         
         vpCameraParameters colorCamInfoVisp;
 
-        vpImage<vpRGBa> vRGBImage;
+        vpImage<vpRGBa> vRGBImage(640,480);
+        vpImage<vpRGBa> vRGBImage2;
         vpImage<unsigned char> vDepthImage;
         vpImage<uint16_t> vDepthImage_raw;
-        vpDisplay* display;
+        // vpDisplay* display;
         vpImage<float> vDepthMap;
 
+        vpDisplayX *dDepth = NULL;
+        vpDisplayX *dRGB   = NULL;
+        vpDisplayX *dRGB2  = NULL;
+        // vpDisplayX dRGB;
         string target_frame_;
         string strImage_sub_topic;
         string strDepthImage_sub_topic;
@@ -114,9 +120,6 @@ PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_): _imageTransport(nh_)
     nh_.param<std::string>("strDepthImage_sub_topic", strDepthImage_sub_topic, "/xtion/depth/image_raw");
     nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/xtion/rgb/camera_info");
     // nh_.param<std::string>("strTransform_sub_topic", strTransform_sub_topic, "/agimus/vision/tags");
-  
-
-   
 
     //publisher & subcriber 
     // image_transport::TransportHints th("compressed");
@@ -134,7 +137,7 @@ PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_): _imageTransport(nh_)
     
     width = 640; 
     height = 480; 
-    display = new vpDisplayX();
+    // display = new vpDisplayX();
     bImageShow = false;
     bDepthImageShow = false;
     display_off = true;
@@ -152,20 +155,23 @@ PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_): _imageTransport(nh_)
     detector.setAprilTagNbThreads(1);
     detector.setDisplayTag(display_tag, color_id < 0 ? vpColor::none : vpColor::getColor(color_id), thickness);
     detector.setZAlignedWithCameraAxis(false);
+
+      vpImage<vpRGBa> color_image(240, 320);
+    vpRGBa color(255, 0, 0);
+    vRGBImage.init(width,height, vpRGBa(255,255,255));
+    dRGB   = new vpDisplayX(vRGBImage, 100, 30, "Pose from Homography");
+
+    // vRGBImage.init(width,height, vpRGBa(0,0,0));
+    // dRGB   = new vpDisplayX(vRGBImage, 100, 30, "Pose from Homography");
+    // dRGB   = new vpDisplayX();
+    // dRGB2  = new vpDisplayX(vRGBImage2, vRGBImage.getWidth()+120, 30, "Pose from RGBD fusion");
+    // dDepth = new vpDisplayX(vDepthImage, 100, vRGBImage.getHeight()+70, "Depth");
 }
 
 PLanarPoseRGBD::~PLanarPoseRGBD()
 {
 	cv::destroyAllWindows();
-}
-
-void PLanarPoseRGBD::infoCamCB(const sensor_msgs::CameraInfo& msg)
-{
-	  std::cout << "Received Camera Info"<<std::endl;
-      // Convert the paramenter in the visp format
-      colorCamInfoVisp = visp_bridge::toVispCameraParameters(msg);
-      colorCamInfoVisp.printParameters();
-
+}vRGBImage
       // Stop the subscriber
       this->colorCamInfoSub.shutdown();
 }
@@ -180,7 +186,7 @@ void PLanarPoseRGBD::imageCB(const sensor_msgs::ImageConstPtr& msg)
     try
 	{
        vRGBImage = visp_bridge::toVispImageRGBa(*rgbImage);
-        vpDisplayX dRGB(vRGBImage);
+        // vpDisplayX dRGB(vRGBImage);
         std::cout << "Color Image size: " << vRGBImage.getWidth() << " " << vRGBImage.getHeight() << std::endl;
         if (!display_off)
         {
@@ -193,6 +199,8 @@ void PLanarPoseRGBD::imageCB(const sensor_msgs::ImageConstPtr& msg)
                     break;
             }
         }
+
+       
 	}
     catch (cv_bridge::Exception& e) 
 	{
@@ -241,24 +249,7 @@ void PLanarPoseRGBD::depthImageCB(const sensor_msgs::ImageConstPtr& msg)
             ROS_INFO("TYPE_32FC1");
             cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
         }
-        // vDepthImage_raw = visp_bridge::toVispImage(*depthImage);
- 
-         // _vpImageCamera  = visp_bridge::toVispImage(*(_cv_ptr->toImageMsg()));
-       
-
-
-        // cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
-
-        // // vDepthImage_raw  = visp_bridge::toVispImage(*(cvPtr->toImageMsg()));
-
-        // cvPtr->image.copyTo(img);
-        // cv::normalize(img,imgNormalized,0.,255.,cv::NORM_MINMAX,CV_8U);
-
-        // imshow("Display window", imgNormalized);
-        // int k = cv::waitKey(0); // Wait for a keystroke in the window
-
     
-
 	}
     catch (cv_bridge::Exception& e) 
 	{
@@ -272,16 +263,9 @@ void PLanarPoseRGBD::depthImageCB(const sensor_msgs::ImageConstPtr& msg)
 //output
 void PLanarPoseRGBD::poseDetect()
 {
-
-    
     vpImage<unsigned char> vGrayImage;
-
-    // vpImage<unsigned char>   vDepthImage;
     vpImage<vpRGBa>          vDepth;
-    vpROSGrabber vGrabber;        // Create a grabber for ROS
-    
     vpDetectorAprilTag detector(vpDetectorAprilTag::TAG_36h11);
-
 
     try {
         if (vDepthImage.getWidth() > 0 && vDepthImage.getHeight() > 0 && vRGBImage.getWidth() > 0 && vRGBImage.getHeight() > 0)
@@ -289,6 +273,16 @@ void PLanarPoseRGBD::poseDetect()
             vpImage<vpRGBa> vRGBImage2 = vRGBImage;
             vpImage<unsigned char> vGrayImage;
             vpImage<float> depthMap;
+          
+           
+            // dRGB2  = new vpDisplayX(vRGBImage2, vRGBImage.getWidth()+120, 30, "Pose from RGBD fusion");
+            // dDepth = new vpDisplayX(vDepthImage, 100, vRGBImage.getHeight()+70, "Depth");
+
+            vpDisplay::display(vRGBImage);
+            // vpDisplay::display(vRGBImage2);
+            // vpDisplay::display(vDepthImage);
+
+
             // vpImageConvert::convert(vDepthImage, vDepthImage_raw);
             vpImageConvert::createDepthHistogram(vDepthImage_raw, vDepth);
             vpImageConvert::convert(vRGBImage, vGrayImage);
@@ -304,71 +298,68 @@ void PLanarPoseRGBD::poseDetect()
                     }
                 }
             }
-            vpDisplayX dGray(vGrayImage);
-            vpDisplayX dRGB(vRGBImage);
-            vpDisplayX dRGB2(vRGBImage2);
-            vpDisplay::display(vGrayImage);
-            vpDisplay::display(vRGBImage);
-            vpDisplay::display(vRGBImage2);
+
+
+            // vpDisplayX *dDepth = NULL;
+            // vpDisplayX *dRGB   = NULL;
+            // vpDisplayX *dRGB2  = NULL;
+
+          
             std::cout << "Histogram Image size: " << vGrayImage.getWidth() << " " << vGrayImage.getHeight() << std::endl;
         
             std::vector<vpHomogeneousMatrix> cMo_vec;
             detector.detect(vGrayImage, tagSize, colorCamInfoVisp, cMo_vec );
             std::cout << cMo_vec.size();
+            
             // // Display camera pose for each tag
             for (int i = 0; i < cMo_vec.size(); i++) {
-                vpDisplay::displayFrame(vGrayImage, cMo_vec[i], colorCamInfoVisp, tagSize / 2, vpColor::none, 3);
+                vpDisplay::displayFrame(vRGBImage, cMo_vec[i], colorCamInfoVisp, tagSize / 2, vpColor::none, 3);
                 // std::cout << "passed \n";
             }
            
 
-            std::vector<std::vector<vpImagePoint> > tags_corners = detector.getPolygon();
-            std::vector<int> tags_id = detector.getTagsId();
-            std::map<int, double> tags_size;
-            tags_size[-1] = tagSize; // Default tag size
-            std::vector<std::vector<vpPoint> > tags_points3d = detector.getTagsPoints3D(tags_id, tags_size);
-            for (size_t i = 0; i < tags_corners.size(); i++) {
-                vpHomogeneousMatrix cMo;
-                double confidence_index;
-                if (vpPose::computePlanarObjectPoseFromRGBD(depthMap, tags_corners[i], colorCamInfoVisp, tags_points3d[i], cMo, &confidence_index)) {
-                        if (confidence_index > 0.5) {
-                            std::cout << "DISPLAY " << std::endl;
-                            vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::none, 3);
-                            }
-                        else if (confidence_index > 0.25) {
-                        vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::orange, 3);
-                    }
-                    else {
-                        vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::red, 3);
-                    }
-                    std::stringstream ss;
-                    ss << "Tag id " << tags_id[i] << " confidence: " << confidence_index;
-                    vpDisplay::displayText(vRGBImage2, 35 + i*15, 20, ss.str(), vpColor::red);
+            // std::vector<std::vector<vpImagePoint> > tags_corners = detector.getPolygon();
+            // std::vector<int> tags_id = detector.getTagsId();
+            // std::map<int, double> tags_size;
+            // tags_size[-1] = tagSize; // Default tag size
+            // std::vector<std::vector<vpPoint> > tags_points3d = detector.getTagsPoints3D(tags_id, tags_size);
+            // for (size_t i = 0; i < tags_corners.size(); i++) {
+            //     vpHomogeneousMatrix cMo;
+            //     double confidence_index;
+            //     if (vpPose::computePlanarObjectPoseFromRGBD(depthMap, tags_corners[i], colorCamInfoVisp, tags_points3d[i], cMo, &confidence_index)) {
+            //             if (confidence_index > 0.5) {
+            //                 // std::cout << "DISPLAY " << std::endl;
+            //                 vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::none, 3);
+            //                 }
+            //             else if (confidence_index > 0.25) {
+            //             vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::orange, 3);
+            //         }
+            //         else {
+            //             vpDisplay::displayFrame(vRGBImage2, cMo, colorCamInfoVisp, tagSize/2, vpColor::red, 3);
+            //         }
+            //         std::stringstream ss;
+            //         ss << "Tag id " << tags_id[i] << " confidence: " << confidence_index;
+            //         vpDisplay::displayText(vRGBImage2, 35 + i*15, 20, ss.str(), vpColor::red);
 
                     
-                }
-            }
+            //     }
+            // }
 
             vpDisplay::displayText(vRGBImage, 20, 20, "Pose from homography + VVS", vpColor::red);
-            vpDisplay::displayText(vRGBImage2, 20, 20, "Pose from RGBD fusion", vpColor::red);
-            vpDisplay::displayText(vRGBImage, 35, 20, "Click to quit.", vpColor::red);
-            // t = vpTime::measureTimeMs() - t;
-            // time_vec.push_back(t);
- 
-            std::stringstream ss;
-            // ss << "Detection time: " << t << " ms for " << detector.getNbObjects() << " tags";
-            // vpDisplay::displayText(vRGBImage, 50, 20, ss.str(), vpColor::red);
+            // vpDisplay::displayText(vRGBImage2, 50, 50, "Pose from RGBD fusion", vpColor::red);
+            // vpDisplay::displayText(vRGBImage, 80, 80, "Click to quit.", vpColor::red);
+          
 
             // if (vpDisplay::getClick(vRGBImage, false))
                 // break;
-            vpDisplay::flush(vGrayImage);
-            vpDisplay::flush(vRGBImage2);
+            // vpDisplay::flush(vDepthImage);
+            // vpDisplay::flush(vRGBImage2);
             vpDisplay::flush(vRGBImage);
-                // while (1)
-                // {
-                //     if (vpDisplay::getClick(vRGBImage, false) )
-                //         break;
-                // }
+            // while (1)
+            // {
+            //     if (vpDisplay::getClick(vRGBImage2, false) || vpDisplay::getClick(vRGBImage, false) || vpDisplay::getClick(vDepthImage, false) )
+            //         break;
+            // }
         }
  
     }
@@ -383,9 +374,9 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;  
   PLanarPoseRGBD ps(nh);
 
-  ros::Rate loop_rate(30);
+  ros::Rate loop_rate(100);
   while(ros::ok()) {
-    ROS_INFO("Looping");
+    // ROS_INFO("Looping");
     ros::spinOnce();
     ps.poseDetect();
     loop_rate.sleep();
