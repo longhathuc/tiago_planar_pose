@@ -64,7 +64,7 @@ class PLanarPoseRGBD
         void infoCamCB(const sensor_msgs::CameraInfo& msg);
         void infoDepthCamCB(const sensor_msgs::CameraInfo& msg); 
         void mappingDepth2Color(cv::Mat &src, cv::Mat &dst, const float *mat);
-        
+        vpImage<uint16_t> toVispImageFromDepth(const sensor_msgs::Image& src);
         ros::NodeHandle nh_;    
         ros::Subscriber colorCamInfoSub;
         ros::Subscriber depthCamInfoSub;
@@ -240,6 +240,24 @@ void PLanarPoseRGBD::imageCB(const sensor_msgs::ImageConstPtr& msg)
    
 }
 
+
+vpImage<uint16_t> PLanarPoseRGBD::toVispImageFromDepth(const sensor_msgs::Image& src)
+ {
+//    using sensor_msgs::image_encodings::TYPE_16UC1;
+
+   vpImage<uint16_t> dst(src.height, src.width);
+ 
+   if (src.encoding == sensor_msgs::image_encodings::TYPE_16UC1)
+   {
+        std::cout << "copy " << std::endl;
+        memcpy(dst.bitmap, &(src.data[0]), dst.getHeight() * src.step * sizeof(unsigned char));
+        //         memcpy(dst.bitmap, &(src.data[0]), dst.getHeight() * src.step * sizeof(uint16_t));
+   }
+   return dst;
+ }
+
+
+
 void mappingDepth2Color(cv::Mat &src, cv::Mat &dst, const float *mat)
 {
     double  z;
@@ -276,11 +294,17 @@ void PLanarPoseRGBD::depthImageCB(const sensor_msgs::ImageConstPtr& msg)
         if ("16UC1" == msg->encoding)
         {
             // ROS_INFO("TYPE_16UC1");
-            cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_8UC1);
+            // cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_8UC1);
             // cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
             // cout << "M = " << endl << " "  << cvPtr->image << endl << endl;
-             cv::Mat mat = cvPtr->image;
-            vpImageConvert::convert(cvPtr->image, vDepthImage);
+            // cv::Mat mat = cvPtr->image;
+            // cv::Mat dstMat = new cv.Mat();
+            // M = cv.matFromArray(2, 3, cv.CV_64FC1, [1, 0, 0, 0, 1, 1]);
+            // cv.warpAffine(mat, dstMat, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+            vDepthImage_raw = toVispImageFromDepth(*msg);
+            vpImageConvert::convert(vDepthImage_raw, vDepthImage);
+            // vDepthImage = toVispImageFromDepth(*msg);
+            // vpImageConvert::convert(cvPtr->image, vDepthImage);
             // vDepthImage_raw.init(height,width);
             // cv::Mat mat = cvPtr->image;
             //  for (unsigned int i = 0; i < height; i++) {
@@ -400,7 +424,7 @@ void PLanarPoseRGBD::poseDetect()
             // vpDisplay::displayText(vRGBImage, 80, 80, "Click to quit.", vpColor::red);
           
 
-            // vpDisplay::flush(vDepthImage);
+            vpDisplay::flush(vDepthImage);
             vpDisplay::flush(vRGBFusionImage);
             vpDisplay::flush(vRGBImage);
             bGotDepth = false;
