@@ -383,6 +383,9 @@ void PLanarPoseRGBD::poseDetect()
             for (int i = 0; i < cMo_vec.size(); i++) {
                 vpDisplay::displayFrame(vRGBImage, cMo_vec[i], colorCamInfoVisp, tagSize / 2, vpColor::none, 3);
                 // std::cout << "passed \n";
+
+                std::cout <<  "Color Matrix" << std::endl;
+
                 cMo_vec[i].print();
                 std::cout << std::endl;
             }
@@ -409,6 +412,7 @@ void PLanarPoseRGBD::poseDetect()
                     }
 
                     std::cout << "Tag ID:" << tags_id[i] << std::endl;
+                    std::cout <<  "Deep Matrix" << std::endl;
                     cMo.print();
                      std::cout << std::endl;
                     std::stringstream ss;
