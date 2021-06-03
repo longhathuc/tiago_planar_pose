@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_geometry_msgs
   image_transport
   visp_ros
+  
 )
 
 ## System dependencies are found with CMake's conventions
