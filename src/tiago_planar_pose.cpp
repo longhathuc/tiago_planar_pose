@@ -22,6 +22,8 @@
 
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/sync_policies/exact_time.h>
 
 // #include <tf2_ros/static_transform_broadcaster.h>
 #include <urdf/model.h>
@@ -72,11 +74,11 @@ protected:
 
     image_transport::ImageTransport _imageTransport;
 
-    // message_filters::Subscriber<Image> image_sub;      //(nh_, "/camera/color/image_raw", 1);
-    // message_filters::Subscriber<Image> deph_image_sub; //(nh_, "/camera/aligned_depth_to_color/image_raw", 1);
-
-    // image_transport::Subscriber        image_sub;
-    // image_transport::Subscriber        deph_image_sub;
+    message_filters::Subscriber<sensor_msgs::Image> image_sub;      //(nh_, "/camera/color/image_raw", 1);
+    message_filters::Subscriber<sensor_msgs::Image> deph_image_sub; //(nh_, "/camera/aligned_depth_to_color/image_raw", 1);
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
+    typedef message_filters::Synchronizer<MySyncPolicy> Sync;
+    boost::shared_ptr<Sync> sync_;
 
     sensor_msgs::ImageConstPtr rgbImage;
     sensor_msgs::ImageConstPtr depthImage;
@@ -107,50 +109,36 @@ protected:
     bool bDepthImageShow;
     bool display_off;
 
-    //  vpDetectorAprilTag::vpAprilTagFamily tagFamily = vpDetectorAprilTag::TAG_36h11;
     vpDetectorAprilTag detector;
-    // vpCameraParameters cam;
     float quad_decimate;
     bool display_tag;
     int color_id;
     unsigned int thickness;
     double tagSize;
     float depth_scale;
-    bool bGotDepth;
-    bool bGotColor;
 };
 
-// PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_): _imageTransport(nh_),
-//                                                   cinfo_(new camera_info_manager::CameraInfoManager(nh_))
 PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_) : _imageTransport(nh_)
 {
     //Parameters for topics
-    // nh_.param<std::string>("strImage_sub_topic",      strImage_sub_topic,      "/xtion/rgb/image_raw");
-    // nh_.param<std::string>("strDepthImage_sub_topic", strDepthImage_sub_topic, "/xtion/depth/image_raw");
-    // nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/xtion/rgb/camera_info");
-    // nh_.param<std::string>("strDepthCameraInfo_sub_topic", strDepthCameraInfo_sub_topic, "/xtion/depth/camera_info");
-    nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/camera/color/image_raw");
-    nh_.param<std::string>("strDepthImage_sub_topic", strDepthImage_sub_topic, "/camera/aligned_depth_to_color/image_raw");
-    nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/camera/color/camera_info");
-    nh_.param<std::string>("strDepthCameraInfo_sub_topic", strDepthCameraInfo_sub_topic, "/camera/aligned_depth_to_color/camera_info");
-    // nh_.param<std::string>("strTransform_sub_topic", strTransform_sub_topic, "/agimus/vision/tags");
+    nh_.param<std::string>("strImage_sub_topic",      strImage_sub_topic,      "/xtion/rgb/image_raw");
+    nh_.param<std::string>("strDepthImage_sub_topic", strDepthImage_sub_topic, "/xtion/depth/image_raw");
+    nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/xtion/rgb/camera_info");
+    nh_.param<std::string>("strDepthCameraInfo_sub_topic", strDepthCameraInfo_sub_topic, "/xtion/depth/camera_info");
+   
+    // nh_.param<std::string>("strImage_sub_topic", strImage_sub_topic, "/camera/color/image_raw");
+    // nh_.param<std::string>("strDepthImage_sub_topic", strDepthImage_sub_topic, "/camera/aligned_depth_to_color/image_raw");
+    // nh_.param<std::string>("strCameraInfo_sub_topic", strCameraInfo_sub_topic, "/camera/color/camera_info");
+    // nh_.param<std::string>("strDepthCameraInfo_sub_topic", strDepthCameraInfo_sub_topic, "/camera/aligned_depth_to_color/camera_info");
 
-//  message_filters::Subscriber<Image> image_sub;      //(nh_, "/camera/color/image_raw", 1);
-    // message_filters::Subscriber<Image> deph_image_sub; //(nh_, "/camera/aligned_depth_to_color/image_raw", 1);
-
-    //publisher & subcriber
-    // image_transport::TransportHints th("compressed");
-    // image_sub = _imageTransport.subscribe(strImage_sub_topic, 1, &PLanarPoseRGBD::imageCB, this, image_transport::TransportHints("compressed"));
-    message_filters::Subscriber<Image> image_sub(nh_, strImage_sub_topic, 1);
+    image_sub.subscribe(nh_, strImage_sub_topic, 1);
     ROS_INFO("Subcribed to the topic: %s", strImage_sub_topic.c_str());
 
-    message_filters::Subscriber<Image> deph_image_sub(nh_, strDepthImage_sub_topic, 1);
-    // deph_image_sub.subscribe(nh_, strDepthImage_sub_topic, 1, ros::TransportHints(), 0);
-    // deph_image_sub = _imageTransport.subscribe(strDepthImage_sub_topic, 1, &PLanarPoseRGBD::depthImageCB, this, image_transport::TransportHints("raw"));
+    deph_image_sub.subscribe(nh_, strDepthImage_sub_topic, 1);
     ROS_INFO("Subcribed to the topic: %s", strDepthImage_sub_topic.c_str());
 
-    TimeSynchronizer<Image, Image> sync(image_sub, deph_image_sub, 10);
-    sync.registerCallback(boost::bind(&PLanarPoseRGBD::imageCB, _1, _2));
+    sync_.reset(new Sync(MySyncPolicy(10), image_sub, deph_image_sub));
+    sync_->registerCallback(boost::bind(&PLanarPoseRGBD::imageCB, this, _1, _2));
 
     colorCamInfoSub = nh_.subscribe(strCameraInfo_sub_topic, 1, &PLanarPoseRGBD::infoCamCB, this);
     ROS_INFO("Subcribed to the topic: %s", strCameraInfo_sub_topic.c_str());
@@ -163,7 +151,6 @@ PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_) : _imageTransport(nh_)
 
     width = 640;
     height = 480;
-    // display = new vpDisplayX();
     bImageShow = false;
     bDepthImageShow = false;
     display_off = true;
@@ -196,8 +183,6 @@ PLanarPoseRGBD::PLanarPoseRGBD(ros::NodeHandle nh_) : _imageTransport(nh_)
     dRGBFusion = new vpDisplayX(vRGBFusionImage, vRGBImage.getWidth() + 120, 30, "Pose from RGBD fusion");
     dDepth = new vpDisplayX(vDepthImage, 100, vRGBImage.getHeight() + 70, "Depth");
 
-    bGotDepth = false;
-    bGotColor = false;
 }
 
 PLanarPoseRGBD::~PLanarPoseRGBD()
@@ -233,23 +218,20 @@ void PLanarPoseRGBD::imageCB(const sensor_msgs::ImageConstPtr &msg, const sensor
 {
     cv_bridge::CvImagePtr cvPtr;
     rgbImage = msg;
-
+    // ROS_INFO("imageCB"); 
     try
     {
         vRGBImage = visp_bridge::toVispImageRGBa(*rgbImage);
-        bGotColor = true;
-
         if ("16UC1" == depth_msg->encoding)
         {
             vDepthImage_raw = toVispImageFromDepth(*depth_msg);
             vpImageConvert::convert(vDepthImage_raw, vDepthImage);
-            bGotDepth = true;
         }
         else if ("32FC1" == msg->encoding)
         {
-            // ROS_INFO("TYPE_32FC1");
             cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
         }
+        poseDetect();
     }
     catch (cv_bridge::Exception &e)
     {
@@ -306,34 +288,13 @@ void PLanarPoseRGBD::depthImageCB(const sensor_msgs::ImageConstPtr &msg)
     depthImage = msg;
     try
     {
-
         if ("16UC1" == msg->encoding)
         {
-            // ROS_INFO("TYPE_16UC1");
-            // cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_8UC1);
-            // cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_16UC1);
-            // cout << "M = " << endl << " "  << cvPtr->image << endl << endl;
-            // cv::Mat mat = cvPtr->image;
-            // cv::Mat dstMat = new cv.Mat();
-            // M = cv.matFromArray(2, 3, cv.CV_64FC1, [1, 0, 0, 0, 1, 1]);
-            // cv.warpAffine(mat, dstMat, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
             vDepthImage_raw = toVispImageFromDepth(*msg);
             vpImageConvert::convert(vDepthImage_raw, vDepthImage);
-            // vDepthImage = toVispImageFromDepth(*msg);
-            // vpImageConvert::convert(cvPtr->image, vDepthImage);
-            // vDepthImage_raw.init(height,width);
-            // cv::Mat mat = cvPtr->image;
-            //  for (unsigned int i = 0; i < height; i++) {
-            // for (unsigned int j = 0; j < width; j++)
-            // vDepthImage_raw[i][j] =  mat.at<uint16_t>(i,j);
-            bGotDepth = true;
-
-            // }
-            // vpDisplayX dDepth(vDepthImage);
         }
         else if ("32FC1" == msg->encoding)
         {
-            // ROS_INFO("TYPE_32FC1");
             cvPtr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
         }
     }
@@ -353,9 +314,6 @@ void PLanarPoseRGBD::poseDetect()
 
     try
     {
-        // if (vDepthImage_raw.getWidth() > 0 && vDepthImage_raw.getHeight() > 0 && vRGBImage.getWidth() > 0 && vRGBImage.getHeight() > 0)
-        if (bGotDepth && bGotColor)
-        {
 
             vpImage<unsigned char> vGrayImage;
             vpImage<float> depthMap;
@@ -365,10 +323,8 @@ void PLanarPoseRGBD::poseDetect()
             vpDisplay::display(vRGBFusionImage);
             vpDisplay::display(vDepthImage);
 
-            // vpImageConvert::convert(vDepthImage, vDepthImage_raw);
-            // vpImageConvert::createDepthHistogram(vDepthImage_raw, vDepthImage);
             vpImageConvert::convert(vRGBImage, vGrayImage);
-            depth_scale = 0.001;
+            depth_scale = 0.1;
             depthMap.resize(height, width);
             for (unsigned int i = 0; i < height; i++)
             {
@@ -447,9 +403,6 @@ void PLanarPoseRGBD::poseDetect()
             vpDisplay::flush(vDepthImage);
             vpDisplay::flush(vRGBFusionImage);
             vpDisplay::flush(vRGBImage);
-            bGotDepth = false;
-            bGotColor = false;
-        }
     }
     catch (vpException e)
     {
@@ -462,13 +415,12 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "planar_pose");
     ros::NodeHandle nh;
     PLanarPoseRGBD ps(nh);
+    ros::Rate loop_rate(10);
 
-    ros::Rate loop_rate(100);
     while (ros::ok())
     {
         // ROS_INFO("Looping");
         ros::spinOnce();
-        ps.poseDetect();
         loop_rate.sleep();
     }
 }
